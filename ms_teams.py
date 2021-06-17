@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 17 21:13:18 2021
-
-@author: lucifer
-"""
 
 import selenium
 from selenium import webdriver
