@@ -3,29 +3,29 @@
 """
 Created on Thu Jun 17 21:13:18 2021
 
-@author: lucifer
+@author: Arpit
 """
-
-from flask.templating import render_template
 import selenium
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from validate_email import validate_email
 import time
-import easygui
-
+import os
 
 def add_team_func(ids,pas,name,fileName,col_name):
-    print('Runned')
-    URL='https://login.microsoftonline.com/common/oauth2/authorize?response_type=id_token&client_id=5e3ce6c0-2b1f-4285-8d4b-75ee78787346&redirect_uri=https%3A%2F%2Fteams.microsoft.com%2Fgo&state=a3e39318-0960-4927-8c0f-2a57c52d0394&client-request-id=65d68f2e-5199-412f-970c-a78c93e0001a&x-client-SKU=Js&x-client-Ver=1.0.9&nonce=f1a7c949-f673-4e5d-961b-a7e2d244f523&domain_hint=&sso_reload=true'
-    
-    try:
-        driver = webdriver.Chrome(executable_path='./chromedriver')   ## Chomedriver Directory
-        driver.maximize_window()
-        driver.get(URL)
-        
+
+    URL='https://teams.microsoft.com'
+    options = webdriver.ChromeOptions()
+    options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    driver= webdriver.Chrome(executable_path='chromedriver.exe',options=options)
+    driver.maximize_window()
+    driver.get(URL)
+
+    try: 
+        WebDriverWait(driver, 50).until(EC.element_to_be_clickable((By.ID,'i0116')))   
         login_id=driver.find_element_by_id('i0116')
         login_id.send_keys(ids)      #### Mail Id
         submit1=driver.find_element_by_id('idSIButton9')
@@ -42,16 +42,17 @@ def add_team_func(ids,pas,name,fileName,col_name):
 
         try:
             driver.find_element_by_id('passwordError')#  Might throw error due to incorrect password or mail ID
-            msg='Invalid Password'
+            msg='Invalid Credentials'
             driver.close()
             return msg
-        except:
+        except Exception as e:
             WebDriverWait(driver, 50).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'.ts-btn.ts-btn-fluent.ts-btn-fluent-secondary.ts-btn-fluent-with-icon.join-team-button')))
             create_team=driver.find_element_by_css_selector('.ts-btn.ts-btn-fluent.ts-btn-fluent-secondary.ts-btn-fluent-with-icon.join-team-button') # select create or join button
             create_team.click()
     
-    except:
-        msg='Invalid ID'
+    except Exception as e:
+        print(e)
+        msg='Invalid Credentials'
         driver.close()
         return msg
     
@@ -70,13 +71,25 @@ def add_team_func(ids,pas,name,fileName,col_name):
    
     ######### Adding the members
     import pandas as pd
+    pd.options.mode.chained_assignment = None  # default='warn'
+
     paths='file/'+fileName
     if fileName.split('.')[1]=='xlsx':
-        df=pd.read_excel(paths)
+        df=pd.read_excel(paths,usecols=[col_name])
     elif fileName.split('.')[1]=='csv':
-        df=pd.read_csv(paths)
-    df.loc[len(df)]=''
+        df=pd.read_csv(paths,usecols=[col_name])
     
+    # Fetching values that are only valid email ID
+    new_df=df[df[col_name].apply(lambda x: validate_email(str(x)))]
+    new_df.reset_index(inplace=True,drop=True)
+
+    # Fetching values that are not added
+    remvoed_values= df[df[col_name].isin(new_df[col_name])==False].dropna()
+    new_df.loc[len(new_df)]=''
+    
+    rv_path= 'file/'+fileName+'_rv.xlsx'
+    remvoed_values.to_excel(rv_path,index=False)
+
     
     WebDriverWait(driver, 50).until(EC.element_to_be_clickable((By.CLASS_NAME,'ts-people-picker')))
     member_name=driver.find_element_by_class_name('ts-people-picker')
@@ -87,21 +100,21 @@ def add_team_func(ids,pas,name,fileName,col_name):
     time.sleep(1)
     memberName=member_name.find_element_by_css_selector('.ts-search-input.ng-pristine.ng-valid.ng-empty.ng-touched')
     
-    for i in range(len(df['id'])):
-        if i==5:
+    for i in range(len(new_df[col_name])):
+        if i==3:
             try:
                 length=len(driver.find_element_by_class_name('recipients-list').find_elements_by_class_name('ts-selected-contact'))
                 if length<2:
                     msg='Something went wrong with MS Teams. Not Able to add Members'
                     driver.close()
-                    return render_template('error.html',msg=msg)
+                    return msg
                     
             except:
                 msg='Something went wrong with MS Teams. Not Able to add Members'
                 driver.close()
-                return render_template('error.html',msg=msg)
-        memberName.send_keys(df['id'][i])
-        time.sleep(3)
+                return msg
+        memberName.send_keys(new_df[col_name][i])
+        time.sleep(5)
         memberName.send_keys(Keys.ARROW_DOWN)
         memberName.send_keys(Keys.ENTER)
         memberName.clear()
@@ -120,24 +133,8 @@ def add_team_func(ids,pas,name,fileName,col_name):
     time.sleep(4)
     foot_btn.click()
     
-    return driver
+    return ''
     
-# ids=easygui.enterbox(msg="Enter your Mail ID:",title="Mail ID",strip=True)
-# pas=easygui.passwordbox(msg="Enter your Password:",title="Password")
-# name=easygui.enterbox(msg="Enter the name of the team:",title="Name of the team",strip=True)
-# if (ids is None or pas is None or name is None) or (ids=='' or pas=='' or name==''):
-#     pass
-# else:
-#     try:
-#         driver=add_team_func(ids=ids,pas=pas,name=name)
-#     except Exception as e:
-#         print(e)
-#         rerun=easygui.ccbox(msg='Something went wrong!!!\n Do you want to continue re-run of the code')
-#         if(rerun==True):
-#             driver=add_team_func(ids=ids,pas=pas,name=name)
-#         else:
-#             pass
-
 
 
             
