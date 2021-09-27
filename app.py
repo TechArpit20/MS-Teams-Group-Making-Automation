@@ -1,5 +1,6 @@
 from flask import Flask,render_template,request,session,redirect, url_for
 import os
+import pandas as pd
 import shutil
 from ms_teams import add_team_func
 
@@ -25,14 +26,14 @@ def home():
         file.save(file_name)
 
 
-        import pandas as pd
         paths='file/'+file.filename
         try:
             if file.filename.split('.')[1]=='xlsx':
                 df=pd.read_excel(paths,usecols=[col_name])
             elif file.filename.split('.')[1]=='csv':
                 df=pd.read_csv(paths,usecols=[col_name])
-        except:
+        except Exception as e:
+            print(e)
             return render_template('error.html',msg='Invalid Column Name')
 
         df=df.loc[df[col_name].str.contains('@')]
@@ -41,19 +42,25 @@ def home():
         df.loc[len(df)]=''
 
 
-        msg=add_team_func(email,pas,team_name,file.filename,col_name)
-        print(msg)
+        try:
+            msg=add_team_func(email,pas,team_name,file.filename,col_name)
+
+        except Exception as e:
+            print(e)
+            return render_template('error.html',msg='Do Not Close Chromium')
         if msg!='':
             return render_template('error.html',msg=msg)
         
+        rv_path= paths+'_rv.xlsx'
+        rv_df=pd.read_excel(rv_path,usecols=[col_name])
+        print(rv_df)
+
+
+        if os.path.isdir('file'):
+            shutil.rmtree('file')
+
         return render_template('success.html')
     
     return render_template('home.html')
-
-# @app.route('/success')
-# def success():
-#     return render_template()
-
-
 
 app.run(debug=True)
